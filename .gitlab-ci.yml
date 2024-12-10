@@ -1,0 +1,16 @@
+stages:
+  - build
+build_dev:
+  stage: build
+  only:
+    - main
+  tags:
+    - filevault
+  script:
+    - rundevgit
+    - cd /home/gitlab-runner/filevault
+    - AWS_ACCESS_KEY_ID=$AWS_IAM_USER_GITLAB_ACCESSKEY AWS_SECRET_ACCESS_KEY=$AWS_IAM_USER_GITLAB_SECRETKEY aws s3 cp s3://filevault-api-env-khv6gh/pro/env.example .env
+    - chmod -v 777 .env
+    - docker compose --env-file=.env -f docker-compose.yml --profile prod build
+    - docker compose --env-file=.env -f docker-compose.yml --profile prod down
+    - docker compose --env-file=.env -f docker-compose.yml --profile prod up -d

@@ -1,0 +1,79 @@
+x-app-base: &app-base
+  build: .
+  restart: unless-stopped
+  env_file:
+    - .env
+  command: bash -c " uvicorn app.main:app --log-config ./config.ini --host 0.0.0.0 --port 6688 --lifespan=on --use-colors --loop uvloop --http httptools --reload --log-level debug "
+  ports:
+    - "${WEB_PORT}:6688"
+  logging:
+    driver: "gelf"
+    options:
+      gelf-address: "udp://172.30.31.56:${GRAYLOG_API_PORT}"
+      tag: "${GRAYLOG_API_TAG}"
+
+x-db-base: &db-base
+  build:
+      context: ./db
+      dockerfile: Dockerfile
+  restart: unless-stopped
+  volumes:
+    - aws_db_data:/var/lib/postgresql/data
+  env_file:
+    - .env
+  ports:
+    - "${DB_PORT}:5432"
+  environment:
+    - POSTGRES_USER=${SQL_USER}
+    - POSTGRES_PASSWORD=${SQL_PASS}
+  healthcheck:
+    test: [ "CMD-SHELL", "pg_isready -d $SQL_DB -U $SQL_USER" ]
+    interval: 5s
+    timeout: 5s
+    retries: 5
+
+services:
+  app-prod:
+    <<: *app-base
+    container_name: filevault-api-prod
+    profiles:
+      - prod
+    networks:
+      - filevault_prod
+
+  db-prod:
+    <<: *db-base
+    container_name: filevault-db-prod
+    profiles:
+      - prod
+    networks:
+      - filevault_prod
+   
+  app-dev: 
+    <<: *app-base
+    container_name: filevault-api-dev
+    volumes:
+      - ./app:/home/code/app
+      - ./tests:/home/code/tests
+      - ./migrations:/home/code/migrations
+    profiles: 
+      - dev
+    networks:
+      - filevault_dev
+  
+  db-dev:
+    <<: *db-base
+    container_name: filevault-db-dev
+    profiles:
+      - dev
+    networks:
+      - filevault_dev
+
+networks:
+  filevault_prod:
+    driver: bridge
+  filevault_dev:
+    driver: bridge
+
+volumes:
+  aws_db_data: {}
